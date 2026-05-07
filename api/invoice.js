@@ -1,14 +1,10 @@
 export default async function handler(req, res) {
-  // Only allow POST
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  // Basic CORS — lock this down to your GitHub Pages domain in production
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  const { notes, rate, currency } = req.body;
+  const { notes, rate, currency, from_name, to_name, date, inv_number, tax, payment } = req.body;
 
   if (!notes || typeof notes !== 'string' || notes.trim().length === 0) {
     return res.status(400).json({ error: 'notes field is required' });
@@ -62,9 +58,35 @@ Rules:
       return res.status(502).json({ error: err.error?.message || 'Groq API error' });
     }
 
-    const data = await groqRes.json();
-    const raw = data.choices[0].message.content.replace(/```json|```/g, '').trim();
+    const groqData = await groqRes.json();
+    const raw = groqData.choices[0].message.content.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(raw);
+
+    const total = parsed.items.reduce((s, i) => s + (i.amount || 0), 0) * (1 + (tax || 0) / 100);
+
+    const SUPABASE_URL = process.env.SUPABASE_URL;
+    const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY;
+
+    await fetch(`${SUPABASE_URL}/rest/v1/invoices`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_SECRET_KEY,
+        'Authorization': `Bearer ${SUPABASE_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal',
+      },
+      body: JSON.stringify({
+        from_name: from_name || 'Unknown',
+        to_name: to_name || 'Unknown',
+        date: date || new Date().toISOString(),
+        inv_number: inv_number || '',
+        items: parsed.items,
+        currency: currency || '$',
+        tax: tax || 0,
+        payment: payment || '',
+        total: Math.round(total * 100) / 100,
+      }),
+    });
 
     return res.status(200).json(parsed);
   } catch (e) {

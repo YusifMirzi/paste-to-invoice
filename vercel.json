@@ -1,9 +1,8 @@
 {
   "version": 2,
   "functions": {
-    "api/invoice.js": {
-      "memory": 128,
-      "maxDuration": 15
-    }
+    "api/invoice.js": { "memory": 128, "maxDuration": 15 },
+    "api/history.js": { "memory": 128, "maxDuration": 10 },
+    "api/delete.js":  { "memory": 128, "maxDuration": 10 }
   }
 }
